@@ -81,22 +81,14 @@ void Scheduler::update_current_process() {
 }
 
 shared_ptr<Process> Scheduler::next_process() {
-    auto iter = ready_queue.begin();
+
+    //Removes dead references from head of queue
     drop_while(ready_queue,
             [](weak_ptr<Process> & p) {
                 auto shared_p = p.lock();
                 return bool(shared_p);
             });
-    //while(iter != ready_queue.end()) {
-        //auto shared_proc = iter->lock();
-        //if(shared_proc) {
-            //ready_queue.erase(iter);
-            //return shared_proc;
-        //} else {
-            //Invalid weak references should be removed
-            //iter = ready_queue.erase(iter);
-        //}
-    //}
+
     if(ready_queue.empty()) {
         return idle_process;
     }
