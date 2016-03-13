@@ -6,8 +6,7 @@ using namespace std;
 Scheduler::Scheduler(string input_file, string output_file) :
     input_file(new ifstream(input_file)),
     output_file(new ofstream(output_file)),
-    idle_process(new IdleProcess()),
-    current_process(idle_process)
+    idle_process(new IdleProcess())
 {
     if(!this->input_file->good()) {
         cout << "[ERROR]: Input file did not open correctly." << endl;
@@ -18,10 +17,20 @@ Scheduler::Scheduler(string input_file, string output_file) :
         cout << "[ERROR]: Output file did not open correctly." << endl;
         exit(1);
     }
+
+    current_process = idle_process;
 }
 
 void Scheduler::print_state() const {
-    *output_file << *get_running_process() << " running" << endl;
+    *output_file << *current_process
+                 << " running";
+    if(!current_process->is_idle()) {
+        *output_file << " with " 
+                     << current_process->get_remaining_quantum()
+                     << " left";
+    }
+    *output_file << endl;
+
     *output_file << "Ready Queue: ";
     for(auto& process : ready_queue) {
         auto ptr = process.lock();
@@ -46,32 +55,75 @@ void Scheduler::run() {
         getline(*input_file, next_action);
         parse_action(next_action);
 
-        get_running_process()->tick();
+        current_process->tick();
 
-        if(get_running_process()->no_burst_remaining()) {
-            //terminate(get_running_process()->get_PID());
-            terminate(get_running_process());
-        } else if(get_running_process()->no_quantum_remaining()) {
-            rotate_queue(ready_queue);
-            get_running_process()->set_quantum(TIME_QUANTUM);
-        }
+        update_current_process();
 
         print_state();
     }
 }
 
-void Scheduler::terminate(shared_ptr<Process> process) {
-    std::cout << process->get_PID() << " terminated" << std::endl;
+void Scheduler::update_current_process() {
+    if(current_process->is_idle()) {
+        current_process = next_process();
+        current_process->set_quantum(TIME_QUANTUM);
+
+    } else if(!current_process->burst_remaining()) {
+        terminate(*current_process);
+        current_process = next_process();
+        current_process->set_quantum(TIME_QUANTUM);
+
+    } else if(!current_process->quantum_remaining()) {
+        ready_enqueue(weak_ptr<Process>(current_process));
+        current_process = next_process();
+        current_process->set_quantum(TIME_QUANTUM);
+    }
+}
+
+shared_ptr<Process> Scheduler::next_process() {
+    auto iter = ready_queue.begin();
+    while(iter != ready_queue.end()) {
+        auto shared_proc = iter->lock();
+        if(shared_proc) {
+            ready_queue.erase(iter);
+            return shared_proc;
+        }
+        ++iter;
+    }
+    //for(auto weak_proc : ready_queue) {
+        //auto shared_proc = weak_proc.lock();
+        //if(shared_proc) {
+            //return shared_proc;
+        //}
+    //}
+    return idle_process;
+}
+
+void Scheduler::terminate(Process & process) {
     //The idle process should not be deleted. It also
     //should never have a request to delete it, but this
-    //ensures that.
-    if(process->is_idle())
+    //ensures that it won't.
+    if(process.is_idle())
         return;
 
-    shared_ptr<Process> parent(process->get_parent());
+    auto parent = process.get_parent().lock();
     if(parent) {
+        show_terminate_message(process);
         parent->remove_child(process);
     }
+}
+
+// ============================================================
+// Function: show_terminate_message
+//
+// Recursively walks the process graph from parent to child and
+// outputs a terminate message.
+// ============================================================
+void Scheduler::show_terminate_message(Process & process) {
+    *output_file << process << " terminated" << endl;
+    process.for_each_child([this](Process& p){
+                show_terminate_message(p);
+            });
 }
 
 shared_ptr<Process> Scheduler::get_running_process() const {
@@ -87,10 +139,8 @@ shared_ptr<Process> Scheduler::get_running_process() const {
 }
 
 void Scheduler::create_process(int PID, int burst) {
-    shared_ptr<Process> child(
-            new Process(PID, burst, get_running_process(),
-                [this](Process &a){*output_file << a << " terminated" << endl;}));
-    get_running_process()->add_child(child);
+    shared_ptr<Process> child(new Process(PID, burst, current_process));
+    current_process->add_child(child);
     ready_enqueue(weak_ptr<Process>(child));
 }
 
@@ -144,7 +194,7 @@ void Scheduler::parse_action(string action) {
             return;
         }
 
-        //destroy_action(stoi(tokens[1]));
+        destroy_by_pid(stoi(tokens[1]));
     } else if(tokens[0] == "I") {
         //Idle
     } else if(tokens[0] == "W") {
@@ -157,6 +207,14 @@ void Scheduler::parse_action(string action) {
     } else {
         error_unrecognized_action(action);
     }
+}
+
+void Scheduler::destroy_by_pid(int pid) {
+    idle_process->for_each_child([pid, this](Process & p) {
+                if(p.get_PID() == pid) {
+                    terminate(p);
+                }
+            });
 }
 
 void Scheduler::error_unrecognized_action(string action) {

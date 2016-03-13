@@ -5,7 +5,7 @@
 #include <fstream>
 #include "process.hpp"
 
-#define TIME_QUANTUM 10
+#define TIME_QUANTUM 3
 
 class Scheduler
 {
@@ -18,8 +18,8 @@ private:
     std::unique_ptr<std::ifstream> input_file;
     std::unique_ptr<std::ofstream> output_file;
 
-    std::weak_ptr<Process> current_process;
-    std::shared_ptr<IdleProcess> idle_process;
+    std::shared_ptr<Process> current_process;
+    std::shared_ptr<Process> idle_process;
     std::deque< std::weak_ptr<Process> > ready_queue;
     std::deque< std::weak_ptr<Process> > wait_queue;
 
@@ -31,10 +31,17 @@ private:
     void error_unrecognized_action(std::string);
     void parse_action(std::string);
 
-    void terminate(std::shared_ptr<Process>);
+    void terminate(Process&);
 
     void ready_enqueue(std::weak_ptr<Process>);
     void wait_enqueue(std::weak_ptr<Process>);
+
+    void show_terminate_message(Process&);
+
+    void destroy_by_pid(int);
+
+    void update_current_process();
+    std::shared_ptr<Process> next_process();
 };
 
 std::vector<std::string> split_on_space(std::string);
