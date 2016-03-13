@@ -57,11 +57,16 @@ public:
 
     void for_each_child(std::function<void(Process&)>) const;
 
+    void wait_on(int);
+    bool receive_event(int);
+
     friend std::ostream& operator<<(std::ostream&, const Process&);
 private:
     int PID;
     int remaining_burst;
     int remaining_quantum;
+    bool waiting_for_event;
+    int event_id;
 
     std::weak_ptr<Process> parent;
     std::vector< std::shared_ptr<Process> > children;

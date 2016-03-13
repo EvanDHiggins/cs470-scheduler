@@ -29,6 +29,26 @@ void Process::for_each_child(function<void(Process&)> func) const {
     }
 }
 
+void Process::wait_on(int event_id) {
+    waiting_for_event = true;
+    this->event_id = event_id;
+}
+
+// ============================================================
+// Function: receive_event
+// Returns:  bool
+//
+// Returns true if this process is waiting on an event and
+// this->event_id matches event_id.
+// ============================================================
+bool Process::receive_event(int event_id) {
+    if(this->event_id != event_id)
+        return false;
+
+    waiting_for_event = false;
+    return true;
+}
+
 void Process::tick() {
     --remaining_burst;
     --remaining_quantum;

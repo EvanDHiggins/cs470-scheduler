@@ -86,12 +86,13 @@ shared_ptr<Process> Scheduler::next_process() {
     drop_while(ready_queue,
             [](weak_ptr<Process> & p) {
                 auto shared_p = p.lock();
-                return bool(shared_p);
+                return !bool(shared_p);
             });
 
     if(ready_queue.empty()) {
         return idle_process;
     }
+
     auto ret = ready_queue.front();
     ready_queue.pop_front();
     return ret.lock();
@@ -218,9 +219,24 @@ void Scheduler::parse_action(string action) {
 }
 
 void Scheduler::wait_for_event(int event_id) {
+    if(current_process->is_idle())
+        return;
+
+    current_process->wait_on(event_id);
+
+    wait_enqueue(weak_ptr<Process>(current_process));
+
+    //Set to idle until next process switch occurs
+    current_process = idle_process;
+}
+
+void Scheduler::wait_enqueue(weak_ptr<Process> proc) {
+    *output_file << *current_process << " placed on Wait Queue" << endl;
+    wait_queue.push_back(proc);
 }
 
 void Scheduler::signal_event(int event_id) {
+
 }
 
 void Scheduler::destroy_by_pid(int pid) {

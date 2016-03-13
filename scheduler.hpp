@@ -57,7 +57,12 @@ void rotate_queue(std::deque<T> & queue) {
     std::rotate(queue.begin(), queue.begin()+1, queue.end());
 }
 
-//Removes elements from queue until an element fails the predicate.
+// ============================================================
+// Function: drop_while
+//
+// Removes elements from the head of q until an element fails
+// the predicate.
+// ============================================================
 template<typename T, typename UnaryPredicate>
 void drop_while(std::deque<T> & q, UnaryPredicate pred) {
     for(auto i = q.begin(); i != q.end() && pred(*i);) {
