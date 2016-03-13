@@ -42,6 +42,9 @@ private:
 
     void update_current_process();
     std::shared_ptr<Process> next_process();
+
+    void wait_for_event(int);
+    void signal_event(int);
 };
 
 std::vector<std::string> split_on_space(std::string);
@@ -52,6 +55,14 @@ void rotate_queue(std::deque<T> & queue) {
     if(queue.empty())
         return;
     std::rotate(queue.begin(), queue.begin()+1, queue.end());
+}
+
+//Removes elements from queue until an element fails the predicate.
+template<typename T, typename UnaryPredicate>
+void drop_while(std::deque<T> & q, UnaryPredicate pred) {
+    for(auto i = q.begin(); i != q.end() && pred(*i);) {
+        i = q.erase(i);
+    }
 }
 
 #endif //SCHEDULER_H

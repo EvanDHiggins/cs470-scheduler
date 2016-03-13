@@ -82,21 +82,27 @@ void Scheduler::update_current_process() {
 
 shared_ptr<Process> Scheduler::next_process() {
     auto iter = ready_queue.begin();
-    while(iter != ready_queue.end()) {
-        auto shared_proc = iter->lock();
-        if(shared_proc) {
-            ready_queue.erase(iter);
-            return shared_proc;
-        }
-        ++iter;
-    }
-    //for(auto weak_proc : ready_queue) {
-        //auto shared_proc = weak_proc.lock();
+    drop_while(ready_queue,
+            [](weak_ptr<Process> & p) {
+                auto shared_p = p.lock();
+                return bool(shared_p);
+            });
+    //while(iter != ready_queue.end()) {
+        //auto shared_proc = iter->lock();
         //if(shared_proc) {
+            //ready_queue.erase(iter);
             //return shared_proc;
+        //} else {
+            //Invalid weak references should be removed
+            //iter = ready_queue.erase(iter);
         //}
     //}
-    return idle_process;
+    if(ready_queue.empty()) {
+        return idle_process;
+    }
+    auto ret = ready_queue.front();
+    ready_queue.pop_front();
+    return ret.lock();
 }
 
 void Scheduler::terminate(Process & process) {
@@ -198,7 +204,17 @@ void Scheduler::parse_action(string action) {
     } else if(tokens[0] == "I") {
         //Idle
     } else if(tokens[0] == "W") {
-        //Wait
+        if(tokens.size() != 2) {
+            error_unrecognized_action(action);
+            return;
+        }
+
+        if(!is_number_str(tokens[1])) {
+            error_unrecognized_action(action);
+            return;
+        }
+
+        wait_for_event(stoi(tokens[1]));
     } else if(tokens[0] == "E") {
         //Event
     } else if(tokens[0] == "X") {
@@ -207,6 +223,12 @@ void Scheduler::parse_action(string action) {
     } else {
         error_unrecognized_action(action);
     }
+}
+
+void Scheduler::wait_for_event(int event_id) {
+}
+
+void Scheduler::signal_event(int event_id) {
 }
 
 void Scheduler::destroy_by_pid(int pid) {
