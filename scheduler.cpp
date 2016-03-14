@@ -1,31 +1,87 @@
+// File: scheduler.cpp
+// --------------------------------------------------------
+// Class: CS 470                      Instructor: Dr. Hwang
+// Assignment: Process Scheduling     Date Assigned: 22 February 2016
+// Programmer: Evan Higgins           Date Completed: 18 March 2016
+
 #include "scheduler.hpp"
 #include <sstream>
 
 using namespace std;
 
+// ============================================================
+// Function: Scheduler(string, string)
+//
+// Constructs input files from passed strings and verifies that
+// they opened correctly.
+// ============================================================
 Scheduler::Scheduler(string input_file, string output_file) :
     input_file(new ifstream(input_file)),
     output_file(new ofstream(output_file)),
     idle_process(new IdleProcess())
 {
     if(!this->input_file->good()) {
-        cout << "[ERROR]: Input file did not open correctly." << endl;
+        cerr << "[ERROR]: Input file did not open correctly." << endl;
         exit(1);
     }
 
     if(!this->output_file->good()) {
-        cout << "[ERROR]: Output file did not open correctly." << endl;
+        cerr << "[ERROR]: Output file did not open correctly." << endl;
         exit(1);
     }
 
     current_process = idle_process;
 }
 
+// ============================================================
+// Function: run()
+//
+// run() is the input loop for a scheduler. It executes commands
+// from input_file line by line and updates the state of all
+// processes within it.
+// ============================================================
+void Scheduler::run() {
+    print_state();
+    while(true) {
+
+        string next_action;
+        getline(*input_file, next_action);
+        *output_file << next_action << endl;
+
+        if(next_action == "X") {
+            *output_file << "Current state of simulation:" << endl;
+            print_state();
+            break;
+        }
+
+        current_process->tick();
+
+        ////This method is called before and after parse_action
+        ////in case the current process has run out of quantum
+        ////or burst. In this case most actions on it should
+        ////be no-ops.
+        //update_current_process();
+
+        parse_action(next_action);
+
+        update_current_process();
+
+        print_state();
+    }
+}
+
+// ============================================================
+// Function: print_state()
+//
+// Prints the state of the scheduler. It lists the running
+// process and its remaining quantum, all processes on the
+// ready queue and all processes on the wait queue.
+// ============================================================
 void Scheduler::print_state() const {
     *output_file << *current_process
                  << " running";
     if(!current_process->is_idle()) {
-        *output_file << " with " 
+        *output_file << " with "
                      << current_process->get_remaining_quantum()
                      << " left";
     }
@@ -33,130 +89,23 @@ void Scheduler::print_state() const {
 
     *output_file << "Ready Queue: ";
     for(auto& process : ready_queue) {
+        //Only valid references are printed.
         auto ptr = process.lock();
         if(ptr) {
             *output_file << *ptr << " ";
         }
     }
+
     *output_file << endl << "Wait Queue: ";
     for(auto& process : wait_queue) {
+        //Only valid references are printed.
         auto ptr = process.lock();
         if(ptr) {
             *output_file << *ptr << " " << ptr->get_waiting_on();
         }
     }
+
     *output_file << endl;
-}
-
-void Scheduler::run() {
-    print_state();
-    bool scheduler_done = false;
-    while(!scheduler_done) {
-        string next_action;
-        getline(*input_file, next_action);
-        *output_file << next_action << endl;
-
-        current_process->tick();
-
-        update_current_process();
-
-        scheduler_done = parse_action(next_action);
-        if(scheduler_done) {
-            *output_file << "Current state of simulation:" << endl; 
-            print_state();
-            break;
-        }
-
-        update_current_process();
-        print_state();
-    }
-}
-
-
-void Scheduler::update_current_process() {
-    if(current_process->is_idle()) {
-        current_process = next_process();
-        current_process->set_quantum(TIME_QUANTUM);
-
-    } else if(!current_process->burst_remaining()) {
-        terminate(*current_process);
-        current_process = next_process();
-        current_process->set_quantum(TIME_QUANTUM);
-
-    } else if(!current_process->quantum_remaining()) {
-        ready_enqueue(weak_ptr<Process>(current_process));
-        current_process = next_process();
-        current_process->set_quantum(TIME_QUANTUM);
-    }
-}
-
-shared_ptr<Process> Scheduler::next_process() {
-    drop_dead_refs(ready_queue);
-
-    if(ready_queue.empty()) {
-        return idle_process;
-    }
-
-    auto ret = ready_queue.front();
-    ready_queue.pop_front();
-    return ret.lock();
-}
-
-void Scheduler::terminate(Process & process) {
-    //The idle process should not be deleted. It also
-    //should never have a request to delete it, but this
-    //ensures that it won't.
-    if(process.is_idle())
-        return;
-
-    if(current_process->get_PID() == process.get_PID()) {
-        current_process = idle_process;
-    }
-
-    auto parent = process.get_parent().lock();
-    if(parent) {
-        show_terminate_message(process);
-        parent->remove_child(process);
-    }
-}
-
-// ============================================================
-// Function: show_terminate_message
-//
-// Recursively walks the process graph from parent to child and
-// outputs a terminate message.
-// ============================================================
-void Scheduler::show_terminate_message(Process & process) {
-    *output_file << process << " terminated" << endl;
-    process.for_each_child([this](Process& p){
-                show_terminate_message(p);
-            });
-}
-
-shared_ptr<Process> Scheduler::get_running_process() const {
-    if(ready_queue.empty()) {
-        return idle_process;
-    }
-    //Gets the first valid weak_ptr from the ready queue
-    while(auto shared_proc = ready_queue.front().lock()) {
-        return shared_proc;
-    }
-
-    return idle_process;
-}
-
-void Scheduler::create_process(int PID, int burst) {
-    shared_ptr<Process> child(new Process(PID, burst, current_process));
-    current_process->add_child(child);
-    ready_enqueue(weak_ptr<Process>(child));
-}
-
-void Scheduler::ready_enqueue(weak_ptr<Process> proc) {
-    auto shared_proc = proc.lock();
-    if(shared_proc) {
-        ready_queue.push_back(proc);
-        *output_file << *shared_proc << " placed on Ready Queue" << endl;
-    }
 }
 
 // ============================================================
@@ -165,84 +114,163 @@ void Scheduler::ready_enqueue(weak_ptr<Process> proc) {
 //
 // Parses input and calls necessary functions. Scheduling logic
 // is not contained here. It is entirely input validation. And
-// control flow delegation. 
-//
-// Returns whether the scheduler should cease operation.
+// control flow delegation.
 // ============================================================
-bool Scheduler::parse_action(string action) {
+void Scheduler::parse_action(const string & action) {
     vector<string> tokens = split_on_space(action);
-    if(tokens.size() < 1) {
+    if(tokens.empty()) {
         error_unrecognized_action(action);
-        return true;
+        return;
     }
 
     if(tokens[0] == "C") {
         //Create action takes the form: "C # #"
         if(tokens.size() != 3) {
             error_unrecognized_action(action);
-            return true;
+            return;
         }
 
         //Both arguments to "C" must be integers
         if(!is_number_str(tokens[1]) || !is_number_str(tokens[2])) {
             error_unrecognized_action(action);
-            return true;
+            return;
         }
 
         create_process(stoi(tokens[1]), stoi(tokens[2]));
+
     } else if(tokens[0] == "D") {
         //Destroy action takes the form: "D #"
         if(tokens.size() != 2) {
             error_unrecognized_action(action);
-            return true;
+            return;
         }
 
         //Argument to D must be integer
         if(!is_number_str(tokens[1])) {
             error_unrecognized_action(action);
-            return true;
+            return;
         }
 
         destroy_by_pid(stoi(tokens[1]));
+
     } else if(tokens[0] == "I") {
-        //Idle
+        //Execute no action on idle
+
     } else if(tokens[0] == "W") {
+        //Wait action takes the form: "W #"
         if(tokens.size() != 2) {
             error_unrecognized_action(action);
-            return true;
+            return;
         }
 
+        //Argument to W must be an integer
         if(!is_number_str(tokens[1])) {
             error_unrecognized_action(action);
-            return true;
+            return;
         }
 
         wait_for_event(stoi(tokens[1]));
+
     } else if(tokens[0] == "E") {
-        //Event
+        //Event action takes the form: "E #"
         if(tokens.size() != 2) {
             error_unrecognized_action(action);
-            return true;
+            return;
         }
 
+        //Argument to E must be an integer
         if(!is_number_str(tokens[1])) {
             error_unrecognized_action(action);
-            return true;
+            return;
         }
 
         signal_event(stoi(tokens[1]));
+
     } else if(tokens[0] == "X") {
-        //Exit
-        return true;
+        return;
+
     } else {
         error_unrecognized_action(action);
-        return true;
+        return;
+
     }
-    return false;
 }
 
+
+// ============================================================
+// Function: update_current_process()
+//
+// This changes the current process based on preemption
+// conditions.
+// ============================================================
+void Scheduler::update_current_process() {
+    if(current_process->is_idle()) {
+        current_process = get_next_process();
+        current_process->set_quantum(TIME_QUANTUM);
+
+    } else if(!current_process->burst_remaining()) {
+        cascading_terminate(*current_process);
+        current_process = get_next_process();
+        current_process->set_quantum(TIME_QUANTUM);
+
+    } else if(!current_process->quantum_remaining()) {
+        ready_enqueue(weak_ptr<Process>(current_process));
+        current_process = get_next_process();
+        current_process->set_quantum(TIME_QUANTUM);
+    }
+}
+
+// ============================================================
+// Function: get_next_process
+// Returns:  shared_ptr<Process>
+//
+// Since ready_queue consists of weak_ptr<Process> getting the
+// next process from the queue is not as simple as getting the
+// queue's head. Instead it requires removing weak_ptrs from
+// the head of the list until a valid pointer is found. If none
+// are found the running process should be idle.
+// ============================================================
+shared_ptr<Process> Scheduler::get_next_process() {
+    for(auto iter = ready_queue.begin(); iter != ready_queue.end();) {
+        auto shared_p = iter->lock();
+        if(shared_p) {
+            ready_queue.erase(iter);
+            return shared_p;
+        } else {
+            iter = ready_queue.erase(iter);
+        }
+    }
+    return idle_process;
+}
+
+// ============================================================
+// Function: create_process(int, int)
+//
+// New processes are implicitly children of the running process.
+// Here a new process is initialized and added to the
+// ready_queue.
+// ============================================================
+void Scheduler::create_process(int PID, int burst) {
+    //An exiting process's children will die when it terminates
+    if(!current_process->burst_remaining())
+        return;
+    shared_ptr<Process> child(new Process(PID, burst, current_process));
+    current_process->add_child(child);
+    ready_enqueue(weak_ptr<Process>(child));
+}
+
+// ============================================================
+// Function: wait_for_event(int)
+//
+// Moves the currently running process to the wait queue and
+// sets it to wait on event_id.
+// ============================================================
 void Scheduler::wait_for_event(int event_id) {
     if(current_process->is_idle())
+        return;
+
+    //An exiting process should not be placed on the wait queue.
+    if(!current_process->burst_remaining())
         return;
 
     current_process->wait_on(event_id);
@@ -253,11 +281,16 @@ void Scheduler::wait_for_event(int event_id) {
     current_process = idle_process;
 }
 
-void Scheduler::wait_enqueue(weak_ptr<Process> proc) {
-    *output_file << *current_process << " placed on Wait Queue" << endl;
-    wait_queue.push_back(proc);
-}
-
+// ============================================================
+// Function: signal_event(int)
+//
+// Finds all processes on the event queue which are waiting
+// on event_id and are valid references. The whole wait_queue
+// must be searched because multiple processes can respond to
+// the same event. In this case the processes will be added to
+// the ready_queue in the order in which they were placed on
+// the wait_queue.
+// ============================================================
 void Scheduler::signal_event(int event_id) {
     for(auto i = wait_queue.begin(); i != wait_queue.end();) {
         auto shared_proc = i->lock();
@@ -272,16 +305,113 @@ void Scheduler::signal_event(int event_id) {
     }
 }
 
+// ============================================================
+// Function: destroy_by_pid(int)
+//
+// Recursively searches the Process graph for a matching PID
+// and terminates that process. Ignores processes not owned
+// by the currently running process.
+// ============================================================
 void Scheduler::destroy_by_pid(int pid) {
+    if(!current_process->burst_remaining())
+        return;
+
+    if(!current_process->owns(pid))
+        return;
+
     idle_process->for_each_child([pid, this](Process & p) {
                 if(p.get_PID() == pid) {
-                    terminate(p);
+                    cascading_terminate(p);
                 }
             });
 }
 
-void Scheduler::error_unrecognized_action(string action) {
-    std::cout << "[ERROR]: Unrecognized command: " << action << std::endl;
+// ============================================================
+// Function: cascading_terminate(Process&)
+//
+// Processes are represented as a tree of references.
+// A parent process P has a vector of shared_ptrs to its children
+// and each child process has a weak_ptr reference to its parents.
+//
+// All references other than these must be weak_ptrs (or temporary
+// shared_ptr accesses of these weak_ptrs). This rule ensures
+// that once a parent's shared_ptr reference to a child process
+// is destructed it will free that process, which will cascade
+// down the tree terminating each process.
+// ============================================================
+void Scheduler::cascading_terminate(Process & process) {
+    //The idle process should not be deleted. It also
+    //should never have a request to delete it, but this
+    //ensures that it won't be.
+    if(process.is_idle())
+        return;
+
+    //If the current process is being deleted the shared_ptr
+    //held by current_process must be deleted otherwise the
+    //shared_ptr semantics of process destruction is ignored.
+    if(current_process->get_PID() == process.get_PID()) {
+        current_process = idle_process;
+    }
+
+    show_terminate_message(process);
+    process.terminate();
+}
+
+// ============================================================
+// Function: show_terminate_message
+//
+// Recursively walks the process graph from parent to child and
+// outputs a terminate message.
+//
+// Since process termination is handled through shared_ptr
+// destructor semantics (see cascading_terminate for more information)
+// "PID # # terminated" messages must be preemptively output
+// to.
+//
+// I also experimented with passing a function to Processes on
+// construction which captured this->output_file and executed
+// an output message when Process::~Process was called. This
+// did work, but I'm very uncertain on a few specific destructor
+// related semantics and was concerned about potential output
+// to an invalid file. So I opted to do it in a more straightforward
+// manner. It's also more logical this way.
+// ============================================================
+void Scheduler::show_terminate_message(const Process & process) const {
+    *output_file << process << " terminated" << endl;
+
+    process.for_each_child([this](Process& p){
+                show_terminate_message(p);
+            });
+}
+
+// ============================================================
+// Function: ready_enqueue(weak_ptr<Process>)
+//
+// Enqueues a process to ready_queue if it is a valid weak_ptr.
+// ============================================================
+void Scheduler::ready_enqueue(const weak_ptr<Process> & proc) {
+    auto shared_proc = proc.lock();
+    if(shared_proc) {
+        *output_file << *shared_proc << " placed on Ready Queue" << endl;
+        ready_queue.push_back(proc);
+    }
+}
+
+// ============================================================
+// Function: wait_enqueue(weak_ptr<Process>)
+//
+// Enqueues a process to wait_queue if it is a valid weak_ptr.
+// ============================================================
+void Scheduler::wait_enqueue(const weak_ptr<Process> & proc) {
+    auto shared_proc = proc.lock();
+    if(shared_proc) {
+        *output_file << *shared_proc << " placed on Wait Queue" << endl;
+        wait_queue.push_back(proc);
+    }
+}
+
+void Scheduler::error_unrecognized_action(const string & action) {
+    cerr << "[ERROR]: Unrecognized command: " << action << endl;
 }
 
 // ============================================================
@@ -292,7 +422,7 @@ void Scheduler::error_unrecognized_action(string action) {
 // function in the C++ standard library. This function is needed
 // to tokenize the input actions for parsing.
 // ============================================================
-vector<string> split_on_space(string str) {
+vector<string> split_on_space(const string & str) {
     vector<string> tokens;
     istringstream strstream(str);
 
@@ -306,11 +436,17 @@ vector<string> split_on_space(string str) {
     return tokens;
 }
 
-bool is_number_str(string str) {
-    for(int i = 0; i < str.size(); i++) {
-        if(!isdigit(str[i]))
+// ============================================================
+// Function: is_number_st
+// Returns:  bool
+//
+// Returns true if the string represents an integer.
+// i.e. All of its chars are digits.
+// ============================================================
+bool is_number_str(const string & str) {
+    for(auto &c : str) {
+        if(!isdigit(c))
             return false;
     }
     return true;
 }
-

@@ -1,3 +1,9 @@
+// File: process.cpp
+// --------------------------------------------------------
+// Class: CS 470                      Instructor: Dr. Hwang
+// Assignment: Process Scheduling     Date Assigned: 22 February 2016
+// Programmer: Evan Higgins           Date Completed: 18 March 2016
+
 #include <algorithm>
 #include "process.hpp"
 
@@ -21,6 +27,17 @@ void Process::tick() {
 }
 
 // ============================================================
+// Function: add_child(shared_ptr<Process>
+//
+// Adds a new shared_ptr reference to the processes list of
+// children.
+// ============================================================
+void Process::add_child(shared_ptr<Process> child) {
+    if(child)
+        children.push_back(child);
+}
+
+// ============================================================
 // Function: remove_child(Process&)
 //
 // Removes all children with the same PID as child.
@@ -34,9 +51,62 @@ void Process::remove_child(Process & child) {
             children.end());
 }
 
+// ============================================================
+// Function: wait_on(int)
+//
+// Causes process to wait on the passed event_id.
+// ============================================================
+void Process::wait_on(int event_id) {
+    this->event_id = event_id;
+    waiting_for_event = true;
+}
 
+// ============================================================
+// Function: receive_event
+// Returns:  bool
+//
+// Returns true if this is waiting on the provided event_id.
+// ============================================================
+bool Process::receive_event(int event_id) {
+    if(waiting_for_event && this->event_id == event_id) {
+        waiting_for_event = false;
+        return true;
+    }
+    return false;
+}
 
+// ============================================================
+// Function: owns(Process&)
+// Returns:  bool
+//
+// A process P 'owns' process Q iff:
+//  P has the same PID as Q
+//  OR
+//  One of P's children 'owns' Q. 
+// ============================================================
+bool Process::owns(Process & p) const {
+    if(get_PID() == p.get_PID())
+        return true;
 
+    for(auto &child : children) {
+        if(child->owns(p))
+            return true;
+    }
+
+    return false;
+}
+
+bool Process::owns(int PID) const {
+    if(get_PID() == PID)
+        return true;
+
+    for(auto &child : children) {
+        if(child->owns(PID))
+            return true;
+    }
+
+    return false;
+}
 
 // ============================================================
 // Function: for_each_child
@@ -47,47 +117,28 @@ void Process::remove_child(Process & child) {
 // leak if these references are external to Process. So
 // for_each_child gives me the ability to operate on the process
 // graph without the possibility of a memory leak.
+//
+// This applies func to each child of this and recursively calls
+// itself down the tree.
 // ============================================================
 void Process::for_each_child(function<void(Process&)> func) const {
-    for(auto child : children) {
+    for(auto &child : children) {
         func(*child);
+        child->for_each_child(func);
     }
 }
 
-void Process::wait_on(int event_id) {
-    waiting_for_event = true;
-    this->event_id = event_id;
+void Process::terminate() {
+    auto shared_parent = parent.lock();
+    if(shared_parent) {
+        shared_parent->remove_child(*this);
+    }
 }
 
-// ============================================================
-// Function: receive_event
-// Returns:  bool
-//
-// Returns true if this process is waiting on an event and
-// this->event_id matches event_id.
-// ============================================================
-bool Process::receive_event(int event_id) {
-    if(this->event_id != event_id)
-        return false;
-
-    waiting_for_event = false;
-    return true;
+ostream& operator<<(ostream & out, const Process & proc) {
+    proc.print(out);
+    return out;
 }
-
-
-void Process::set_quantum(int quantum) {
-    remaining_quantum = quantum;
-}
-
-void Process::add_child(shared_ptr<Process> child) {
-    children.push_back(child);
-}
-
-
-//void Process::remove_child(shared_ptr<Process> child) {
-    //children.erase(
-            //remove_if(children.begin(), children.end(), child), children.end());
-//}
 
 void Process::print(ostream & out) const {
     out << "PID " << this->PID << " " << this->remaining_burst;
@@ -95,9 +146,4 @@ void Process::print(ostream & out) const {
 
 void IdleProcess::print(ostream & out) const {
     out << "PID " << IDLE_PID;
-}
-
-ostream& operator<<(ostream & out, const Process & proc) {
-    proc.print(out);
-    return out;
 }

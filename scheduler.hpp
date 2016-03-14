@@ -1,3 +1,9 @@
+// File: scheduler.hpp
+// --------------------------------------------------------
+// Class: CS 470                      Instructor: Dr. Hwang
+// Assignment: Process Scheduling     Date Assigned: 22 February 2016
+// Programmer: Evan Higgins           Date Completed: 18 March 2016
+
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
 
@@ -18,66 +24,37 @@ private:
     std::unique_ptr<std::ifstream> input_file;
     std::unique_ptr<std::ofstream> output_file;
 
+    //Using a shared_ptr for the current_process ensures that it
+    //won't unexpectedly get destructed while it is running.
     std::shared_ptr<Process> current_process;
+
     std::shared_ptr<Process> idle_process;
+
+    //Weak references are used to minimize list queue
+    //searching during termination.
     std::deque< std::weak_ptr<Process> > ready_queue;
     std::deque< std::weak_ptr<Process> > wait_queue;
 
-    std::shared_ptr<Process> get_running_process() const;
-
     void print_state() const;
-    void create_process(int, int);
-
-    void error_unrecognized_action(std::string);
-    bool parse_action(std::string);
-
-    void terminate(Process&);
-
-    void ready_enqueue(std::weak_ptr<Process>);
-    void wait_enqueue(std::weak_ptr<Process>);
-
-    void show_terminate_message(Process&);
-
-    void destroy_by_pid(int);
-
+    void parse_action(const std::string&);
     void update_current_process();
-    std::shared_ptr<Process> next_process();
+    std::shared_ptr<Process> get_next_process();
 
+    void create_process(int, int);
     void wait_for_event(int);
     void signal_event(int);
+    void destroy_by_pid(int);
+
+    void cascading_terminate(Process&);
+    void show_terminate_message(const Process&) const;
+
+    void ready_enqueue(const std::weak_ptr<Process>&);
+    void wait_enqueue(const std::weak_ptr<Process>&);
+
+    void error_unrecognized_action(const std::string&);
 };
 
-std::vector<std::string> split_on_space(std::string);
-bool is_number_str(std::string);
-
-// ============================================================
-// Function: drop_while
-//
-// Removes elements from the head of q until an element fails
-// the predicate.
-// ============================================================
-template<typename T, typename UnaryPredicate>
-void drop_while(std::deque<T> & q, UnaryPredicate pred) {
-    for(auto i = q.begin(); i != q.end() && pred(*i);) {
-        i = q.erase(i);
-    }
-}
-
-// ============================================================
-// Function: delete_dead_refs
-//
-// Drops items from the front of q until it finds a valid
-// reference.
-// ============================================================
-template<typename T>
-void drop_dead_refs(std::deque< std::weak_ptr<T> > & q) {
-    drop_while(q,
-            [](std::weak_ptr<T> & p) {
-                auto shared_p = p.lock();
-                return !bool(shared_p);
-            });
-}
+std::vector<std::string> split_on_space(const std::string&);
+bool is_number_str(const std::string&);
 
 #endif //SCHEDULER_H
-
-

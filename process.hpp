@@ -1,3 +1,9 @@
+// File: process.hpp
+// --------------------------------------------------------
+// Class: CS 470                      Instructor: Dr. Hwang
+// Assignment: Process Scheduling     Date Assigned: 22 February 2016
+// Programmer: Evan Higgins           Date Completed: 18 March 2016
+
 #ifndef PROCESS_H
 #define PROCESS_H
 
@@ -34,6 +40,16 @@ typedef std::weak_ptr<Process> WeakProcPtr;
 // in a vector then processes can't maintain direct references
 // to their children/parent.
 //
+// My first design used vectors of raw pointers to processes.
+// This was very difficult to manage and ensure that no
+// dangling pointers showed up and make sure there were no
+// memory leaks. Next I tried using exclusively shared_ptr.
+// This made it very slow to delete processes because for each
+// child process the ready/wait queue had to be searched.
+// Ultimately I settled on a mix of weak/shared pointers which
+// establishes an "ownership" of parent->child and makes for
+// a more consistent mangament of processes.
+//
 // ============================================================
 class Process
 {
@@ -46,23 +62,26 @@ public:
     int get_waiting_on() const { return event_id; }
     std::weak_ptr<Process> get_parent() const { return parent; }
 
+    void set_quantum(int q) { remaining_quantum = q; };
+
     virtual bool is_idle() const { return false; }
     virtual bool burst_remaining() const { return remaining_burst > 0; }
     virtual bool quantum_remaining() const { return remaining_quantum > 0; }
 
     virtual void tick();
 
-    void remove_child(Process &);
-
-
-    void set_quantum(int);
+    void wait_on(int);
+    bool receive_event(int);
 
     void add_child(std::shared_ptr<Process>);
+    void remove_child(Process &);
+
+    bool owns(Process &) const;
+    bool owns(int) const;
 
     void for_each_child(std::function<void(Process&)>) const;
 
-    void wait_on(int);
-    bool receive_event(int);
+    void terminate();
 
     friend std::ostream& operator<<(std::ostream&, const Process&);
 private:
@@ -73,6 +92,7 @@ private:
     int event_id;
 
     std::weak_ptr<Process> parent;
+
     std::vector< std::shared_ptr<Process> > children;
 
     virtual void print(std::ostream &) const;
