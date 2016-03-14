@@ -29,7 +29,7 @@ private:
     void create_process(int, int);
 
     void error_unrecognized_action(std::string);
-    void parse_action(std::string);
+    bool parse_action(std::string);
 
     void terminate(Process&);
 
@@ -50,13 +50,6 @@ private:
 std::vector<std::string> split_on_space(std::string);
 bool is_number_str(std::string);
 
-template<typename T>
-void rotate_queue(std::deque<T> & queue) {
-    if(queue.empty())
-        return;
-    std::rotate(queue.begin(), queue.begin()+1, queue.end());
-}
-
 // ============================================================
 // Function: drop_while
 //
@@ -68,6 +61,21 @@ void drop_while(std::deque<T> & q, UnaryPredicate pred) {
     for(auto i = q.begin(); i != q.end() && pred(*i);) {
         i = q.erase(i);
     }
+}
+
+// ============================================================
+// Function: delete_dead_refs
+//
+// Drops items from the front of q until it finds a valid
+// reference.
+// ============================================================
+template<typename T>
+void drop_dead_refs(std::deque< std::weak_ptr<T> > & q) {
+    drop_while(q,
+            [](std::weak_ptr<T> & p) {
+                auto shared_p = p.lock();
+                return !bool(shared_p);
+            });
 }
 
 #endif //SCHEDULER_H

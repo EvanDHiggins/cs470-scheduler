@@ -10,8 +10,33 @@ Process::Process(int PID, int burst, weak_ptr<Process> parent) {
     this->remaining_quantum = 0;
 }
 
-Process::~Process() {
+// ============================================================
+// Function: tick()
+//
+// Advances the processes time step by one unit.
+// ============================================================
+void Process::tick() {
+    --remaining_burst;
+    --remaining_quantum;
 }
+
+// ============================================================
+// Function: remove_child(Process&)
+//
+// Removes all children with the same PID as child.
+// ============================================================
+void Process::remove_child(Process & child) {
+    children.erase(
+            remove_if(children.begin(), children.end(),
+                        [&](shared_ptr<Process> p) {
+                            return p->get_PID() == child.get_PID();
+                        }),
+            children.end());
+}
+
+
+
+
 
 // ============================================================
 // Function: for_each_child
@@ -49,10 +74,6 @@ bool Process::receive_event(int event_id) {
     return true;
 }
 
-void Process::tick() {
-    --remaining_burst;
-    --remaining_quantum;
-}
 
 void Process::set_quantum(int quantum) {
     remaining_quantum = quantum;
@@ -62,14 +83,6 @@ void Process::add_child(shared_ptr<Process> child) {
     children.push_back(child);
 }
 
-void Process::remove_child(Process & child) {
-    children.erase(
-            remove_if(children.begin(), children.end(),
-                        [&](shared_ptr<Process> p) {
-                            return p->get_PID() == child.get_PID();
-                        }),
-            children.end());
-}
 
 //void Process::remove_child(shared_ptr<Process> child) {
     //children.erase(

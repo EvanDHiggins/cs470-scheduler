@@ -1,6 +1,6 @@
 CC = clang++
 OUT = scheduler
-CFLAGS = -std=c++11
+CFLAGS = -std=c++11 -g -O0
 
 default: *.cpp
 	$(CC) -o $(OUT) $^ $(CFLAGS) 

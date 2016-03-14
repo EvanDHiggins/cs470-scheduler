@@ -6,6 +6,10 @@
 #include <iostream>
 #include <vector>
 
+class Process;
+typedef std::shared_ptr<Process> SharedProcPtr;
+typedef std::weak_ptr<Process> WeakProcPtr;
+
 // ============================================================
 //
 // The model I settled on to represent parent/child relationships
@@ -31,25 +35,25 @@
 // to their children/parent.
 //
 // ============================================================
-
 class Process
 {
 public:
     Process(int, int, std::weak_ptr<Process>);
-    ~Process();
 
+    /* Accessors */
     int get_PID() const { return PID; }
     int get_remaining_quantum() const { return remaining_quantum; }
-
+    int get_waiting_on() const { return event_id; }
     std::weak_ptr<Process> get_parent() const { return parent; }
 
-    //void remove_child(std::shared_ptr<Process>);
-    void remove_child(Process &);
-
-    virtual void tick();
     virtual bool is_idle() const { return false; }
     virtual bool burst_remaining() const { return remaining_burst > 0; }
     virtual bool quantum_remaining() const { return remaining_quantum > 0; }
+
+    virtual void tick();
+
+    void remove_child(Process &);
+
 
     void set_quantum(int);
 

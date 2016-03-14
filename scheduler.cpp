@@ -42,7 +42,7 @@ void Scheduler::print_state() const {
     for(auto& process : wait_queue) {
         auto ptr = process.lock();
         if(ptr) {
-            *output_file << *ptr << " ";
+            *output_file << *ptr << " " << ptr->get_waiting_on();
         }
     }
     *output_file << endl;
@@ -50,18 +50,28 @@ void Scheduler::print_state() const {
 
 void Scheduler::run() {
     print_state();
-    while(true) {
+    bool scheduler_done = false;
+    while(!scheduler_done) {
         string next_action;
         getline(*input_file, next_action);
-        parse_action(next_action);
+        *output_file << next_action << endl;
 
         current_process->tick();
 
         update_current_process();
 
+        scheduler_done = parse_action(next_action);
+        if(scheduler_done) {
+            *output_file << "Current state of simulation:" << endl; 
+            print_state();
+            break;
+        }
+
+        update_current_process();
         print_state();
     }
 }
+
 
 void Scheduler::update_current_process() {
     if(current_process->is_idle()) {
@@ -81,13 +91,7 @@ void Scheduler::update_current_process() {
 }
 
 shared_ptr<Process> Scheduler::next_process() {
-
-    //Removes dead references from head of queue
-    drop_while(ready_queue,
-            [](weak_ptr<Process> & p) {
-                auto shared_p = p.lock();
-                return !bool(shared_p);
-            });
+    drop_dead_refs(ready_queue);
 
     if(ready_queue.empty()) {
         return idle_process;
@@ -104,6 +108,10 @@ void Scheduler::terminate(Process & process) {
     //ensures that it won't.
     if(process.is_idle())
         return;
+
+    if(current_process->get_PID() == process.get_PID()) {
+        current_process = idle_process;
+    }
 
     auto parent = process.get_parent().lock();
     if(parent) {
@@ -153,30 +161,32 @@ void Scheduler::ready_enqueue(weak_ptr<Process> proc) {
 
 // ============================================================
 // Function: parse_action
+// Return:   bool
 //
 // Parses input and calls necessary functions. Scheduling logic
 // is not contained here. It is entirely input validation. And
-// control flow delegation.
+// control flow delegation. 
+//
+// Returns whether the scheduler should cease operation.
 // ============================================================
-void Scheduler::parse_action(string action) {
-    *output_file << action << endl;
+bool Scheduler::parse_action(string action) {
     vector<string> tokens = split_on_space(action);
     if(tokens.size() < 1) {
         error_unrecognized_action(action);
-        return;
+        return true;
     }
 
     if(tokens[0] == "C") {
         //Create action takes the form: "C # #"
         if(tokens.size() != 3) {
             error_unrecognized_action(action);
-            return;
+            return true;
         }
 
         //Both arguments to "C" must be integers
         if(!is_number_str(tokens[1]) || !is_number_str(tokens[2])) {
             error_unrecognized_action(action);
-            return;
+            return true;
         }
 
         create_process(stoi(tokens[1]), stoi(tokens[2]));
@@ -184,13 +194,13 @@ void Scheduler::parse_action(string action) {
         //Destroy action takes the form: "D #"
         if(tokens.size() != 2) {
             error_unrecognized_action(action);
-            return;
+            return true;
         }
 
         //Argument to D must be integer
         if(!is_number_str(tokens[1])) {
             error_unrecognized_action(action);
-            return;
+            return true;
         }
 
         destroy_by_pid(stoi(tokens[1]));
@@ -199,23 +209,36 @@ void Scheduler::parse_action(string action) {
     } else if(tokens[0] == "W") {
         if(tokens.size() != 2) {
             error_unrecognized_action(action);
-            return;
+            return true;
         }
 
         if(!is_number_str(tokens[1])) {
             error_unrecognized_action(action);
-            return;
+            return true;
         }
 
         wait_for_event(stoi(tokens[1]));
     } else if(tokens[0] == "E") {
         //Event
+        if(tokens.size() != 2) {
+            error_unrecognized_action(action);
+            return true;
+        }
+
+        if(!is_number_str(tokens[1])) {
+            error_unrecognized_action(action);
+            return true;
+        }
+
+        signal_event(stoi(tokens[1]));
     } else if(tokens[0] == "X") {
         //Exit
-        std::exit(0);
+        return true;
     } else {
         error_unrecognized_action(action);
+        return true;
     }
+    return false;
 }
 
 void Scheduler::wait_for_event(int event_id) {
@@ -236,7 +259,17 @@ void Scheduler::wait_enqueue(weak_ptr<Process> proc) {
 }
 
 void Scheduler::signal_event(int event_id) {
-
+    for(auto i = wait_queue.begin(); i != wait_queue.end();) {
+        auto shared_proc = i->lock();
+        if(shared_proc) {
+            if(shared_proc->receive_event(event_id)) {
+                wait_queue.erase(i);
+                ready_enqueue(weak_ptr<Process>(shared_proc));
+            }
+        } else {
+            i = wait_queue.erase(i);
+        }
+    }
 }
 
 void Scheduler::destroy_by_pid(int pid) {
@@ -280,3 +313,4 @@ bool is_number_str(string str) {
     }
     return true;
 }
+
