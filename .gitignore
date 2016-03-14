@@ -3,3 +3,5 @@ input.txt
 exampleinput.dat
 output.txt
 scheduler
+scheduler.dSYM
+valgrind.txt
