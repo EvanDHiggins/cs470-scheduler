@@ -15,23 +15,24 @@ using namespace std;
 // Constructs input files from passed strings and verifies that
 // they opened correctly.
 // ============================================================
-Scheduler::Scheduler(string input_file, string output_file) :
-    input_file(new ifstream(input_file)),
-    output_file(new ofstream(output_file)),
+Scheduler::Scheduler(string input_file_name, string output_file_name) :
+    input_file(input_file_name),
+    output_file(output_file_name),
     idle_process(new IdleProcess())
 {
-    if(!this->input_file->good()) {
+    if(!this->input_file.good()) {
         cerr << "[ERROR]: Input file did not open correctly." << endl;
         exit(1);
     }
 
-    if(!this->output_file->good()) {
+    if(!this->output_file.good()) {
         cerr << "[ERROR]: Output file did not open correctly." << endl;
         exit(1);
     }
 
     current_process = idle_process;
 }
+
 
 // ============================================================
 // Function: run()
@@ -45,26 +46,25 @@ void Scheduler::run() {
     while(true) {
 
         string next_action;
-        getline(*input_file, next_action);
-        *output_file << next_action << endl;
+        getline(input_file, next_action);
+        this->output_file << next_action << endl;
 
         if(next_action == "X") {
-            *output_file << "Current state of simulation:" << endl;
+            this->output_file << "Current state of simulation:" << endl;
             print_state();
             break;
         }
 
         current_process->tick();
 
-        ////This method is called before and after parse_action
-        ////in case the current process has run out of quantum
-        ////or burst. In this case most actions on it should
-        ////be no-ops.
-        //update_current_process();
+        attempt_halt();
 
         parse_action(next_action);
 
-        update_current_process();
+        if(current_process->is_idle()) {
+            current_process = get_next_process();
+            current_process->set_quantum(TIME_QUANTUM);
+        }
 
         print_state();
     }
@@ -77,35 +77,35 @@ void Scheduler::run() {
 // process and its remaining quantum, all processes on the
 // ready queue and all processes on the wait queue.
 // ============================================================
-void Scheduler::print_state() const {
-    *output_file << *current_process
+void Scheduler::print_state() {
+    output_file << *current_process
                  << " running";
     if(!current_process->is_idle()) {
-        *output_file << " with "
+        output_file << " with "
                      << current_process->get_remaining_quantum()
                      << " left";
     }
-    *output_file << endl;
+    output_file << endl;
 
-    *output_file << "Ready Queue: ";
+    output_file << "Ready Queue: ";
     for(auto& process : ready_queue) {
         //Only valid references are printed.
         auto ptr = process.lock();
         if(ptr) {
-            *output_file << *ptr << " ";
+            output_file << *ptr << " ";
         }
     }
 
-    *output_file << endl << "Wait Queue: ";
+    output_file << endl << "Wait Queue: ";
     for(auto& process : wait_queue) {
         //Only valid references are printed.
         auto ptr = process.lock();
         if(ptr) {
-            *output_file << *ptr << " " << ptr->get_waiting_on();
+            output_file << *ptr << " " << ptr->get_waiting_on();
         }
     }
 
-    *output_file << endl;
+    output_file << endl;
 }
 
 // ============================================================
@@ -196,29 +196,35 @@ void Scheduler::parse_action(const string & action) {
     }
 }
 
-
 // ============================================================
-// Function: update_current_process()
+// Function: attempt_halt()
 //
-// This changes the current process based on preemption
-// conditions.
+// Checks to see if the process should be halted. This occurs
+// when the process has no remaining burst or when its quantum
 // ============================================================
-void Scheduler::update_current_process() {
-    if(current_process->is_idle()) {
-        current_process = get_next_process();
-        current_process->set_quantum(TIME_QUANTUM);
-
-    } else if(!current_process->burst_remaining()) {
+void Scheduler::attempt_halt() {
+    if(!current_process->burst_remaining()) {
         cascading_terminate(*current_process);
-        current_process = get_next_process();
-        current_process->set_quantum(TIME_QUANTUM);
-
+        current_process = idle_process;
     } else if(!current_process->quantum_remaining()) {
-        ready_enqueue(weak_ptr<Process>(current_process));
-        current_process = get_next_process();
-        current_process->set_quantum(TIME_QUANTUM);
+        ready_enqueue(current_process);
+        current_process = idle_process;
     }
 }
+
+
+//// ============================================================
+//// Function: update_current_process()
+////
+//// This changes the current process based on preemption
+//// conditions.
+//// ============================================================
+//void Scheduler::next_process_if_idle() {
+    //if(current_process->is_idle()) {
+        //current_process = get_next_process();
+        //current_process->set_quantum(TIME_QUANTUM);
+    //}
+//}
 
 // ============================================================
 // Function: get_next_process
@@ -376,8 +382,8 @@ void Scheduler::cascading_terminate(Process & process) {
 // to an invalid file. So I opted to do it in a more straightforward
 // manner. It's also more logical this way.
 // ============================================================
-void Scheduler::show_terminate_message(const Process & process) const {
-    *output_file << process << " terminated" << endl;
+void Scheduler::show_terminate_message(const Process & process) {
+    output_file << process << " terminated" << endl;
 
     process.for_each_child([this](Process& p){
                 show_terminate_message(p);
@@ -392,7 +398,7 @@ void Scheduler::show_terminate_message(const Process & process) const {
 void Scheduler::ready_enqueue(const weak_ptr<Process> & proc) {
     auto shared_proc = proc.lock();
     if(shared_proc) {
-        *output_file << *shared_proc << " placed on Ready Queue" << endl;
+        output_file << *shared_proc << " placed on Ready Queue" << endl;
         ready_queue.push_back(proc);
     }
 }
@@ -405,7 +411,7 @@ void Scheduler::ready_enqueue(const weak_ptr<Process> & proc) {
 void Scheduler::wait_enqueue(const weak_ptr<Process> & proc) {
     auto shared_proc = proc.lock();
     if(shared_proc) {
-        *output_file << *shared_proc << " placed on Wait Queue" << endl;
+        output_file << *shared_proc << " placed on Wait Queue" << endl;
         wait_queue.push_back(proc);
     }
 }

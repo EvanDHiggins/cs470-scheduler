@@ -21,8 +21,12 @@ public:
     void run();
 private:
 
-    std::unique_ptr<std::ifstream> input_file;
-    std::unique_ptr<std::ofstream> output_file;
+
+    std::ifstream input_file;
+    std::ofstream output_file;
+
+    //std::unique_ptr<std::ifstream> input_file;
+    //std::unique_ptr<std::ofstream> output_file;
 
     //Using a shared_ptr for the current_process ensures that it
     //won't unexpectedly get destructed while it is running.
@@ -35,8 +39,9 @@ private:
     std::deque< std::weak_ptr<Process> > ready_queue;
     std::deque< std::weak_ptr<Process> > wait_queue;
 
-    void print_state() const;
+    void print_state();
     void parse_action(const std::string&);
+    void attempt_halt();
     void update_current_process();
     std::shared_ptr<Process> get_next_process();
 
@@ -46,7 +51,7 @@ private:
     void destroy_by_pid(int);
 
     void cascading_terminate(Process&);
-    void show_terminate_message(const Process&) const;
+    void show_terminate_message(const Process&) ;
 
     void ready_enqueue(const std::weak_ptr<Process>&);
     void wait_enqueue(const std::weak_ptr<Process>&);
