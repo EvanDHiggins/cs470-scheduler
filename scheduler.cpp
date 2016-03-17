@@ -65,12 +65,16 @@ void Scheduler::run() {
         parse_action(next_action);
 
         if(current_process->is_idle()) {
-            current_process->set_quantum(time_quantum);
             current_process = get_next_process();
+            current_process->set_quantum(time_quantum);
         }
 
         print_state();
     }
+
+    //Close to prevent remaining processes from printing 
+    //their terminate messages
+    output_file.close();
 }
 
 // ============================================================
@@ -250,7 +254,12 @@ void Scheduler::create_process(int PID, int burst) {
     //An exiting process's children will die when it terminates
     if(!current_process->burst_remaining())
         return;
-    shared_ptr<Process> child(new Process(PID, burst, current_process));
+    shared_ptr<Process> child(
+            new Process(PID, burst, current_process,
+                [this](Process & p) {
+                    if(output_file.is_open())
+                        output_file << p << " terminated" << endl;
+                }));
     current_process->add_child(child);
     ready_enqueue(weak_ptr<Process>(child));
 }
@@ -349,35 +358,8 @@ void Scheduler::cascading_terminate(Process & process) {
         current_process = idle_process;
     }
 
-    show_terminate_message(process);
+    //show_terminate_message(process);
     process.terminate();
-}
-
-// ============================================================
-// Function: show_terminate_message
-//
-// Recursively walks the process graph from parent to child and
-// outputs a terminate message.
-//
-// Since process termination is handled through shared_ptr
-// destructor semantics (see cascading_terminate for more information)
-// "PID # # terminated" messages must be preemptively output
-// to.
-//
-// I also experimented with passing a function to Processes on
-// construction which captured this->output_file and executed
-// an output message when Process::~Process was called. This
-// did work, but I'm very uncertain on a few specific destructor
-// related semantics and was concerned about potential output
-// to an invalid file. So I opted to do it in a more straightforward
-// manner. It's also more logical this way.
-// ============================================================
-void Scheduler::show_terminate_message(const Process & process) {
-    output_file << process << " terminated" << endl;
-
-    process.for_each_child([this](Process& p){
-                show_terminate_message(p);
-            });
 }
 
 // ============================================================

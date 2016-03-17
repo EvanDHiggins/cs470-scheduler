@@ -14,6 +14,20 @@ Process::Process(int PID, int burst, weak_ptr<Process> parent) {
     this->remaining_burst = burst;
     this->PID = PID;
     this->remaining_quantum = 0;
+    this->on_delete = [](Process& p){};
+}
+
+Process::Process(int PID,
+                 int burst,
+                 weak_ptr<Process> parent,
+                 function<void(Process&)> on_delete) :
+    Process(PID, burst, parent)
+{
+    this->on_delete = on_delete;
+}
+
+Process::~Process() {
+    on_delete(*this);
 }
 
 // ============================================================

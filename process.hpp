@@ -55,6 +55,8 @@ class Process
 {
 public:
     Process(int, int, std::weak_ptr<Process>);
+    Process(int, int, std::weak_ptr<Process>, std::function<void(Process&)>);
+    ~Process();
 
     /* Accessors */
     int get_PID() const { return PID; }
@@ -90,6 +92,10 @@ private:
     int remaining_quantum;
     bool waiting_for_event;
     int event_id;
+
+    //Executed in the destructor and passed *this.
+    //Used for outputing termination message
+    std::function<void(Process &)> on_delete;
 
     std::weak_ptr<Process> parent;
 
