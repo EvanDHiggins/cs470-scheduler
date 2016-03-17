@@ -11,22 +11,18 @@
 #include <fstream>
 #include "process.hpp"
 
-#define TIME_QUANTUM 3
-
 class Scheduler
 {
 public:
-    Scheduler(std::string, std::string);
+    Scheduler(int, std::string, std::string);
 
     void run();
 private:
 
+    int time_quantum;
 
     std::ifstream input_file;
     std::ofstream output_file;
-
-    //std::unique_ptr<std::ifstream> input_file;
-    //std::unique_ptr<std::ofstream> output_file;
 
     //Using a shared_ptr for the current_process ensures that it
     //won't unexpectedly get destructed while it is running.

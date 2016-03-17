@@ -15,7 +15,9 @@ using namespace std;
 // Constructs input files from passed strings and verifies that
 // they opened correctly.
 // ============================================================
-Scheduler::Scheduler(string input_file_name, string output_file_name) :
+Scheduler::Scheduler(int quantum,
+                     string input_file_name,
+                     string output_file_name) :
     input_file(input_file_name),
     output_file(output_file_name),
     idle_process(new IdleProcess())
@@ -30,6 +32,7 @@ Scheduler::Scheduler(string input_file_name, string output_file_name) :
         exit(1);
     }
 
+    time_quantum = quantum;
     current_process = idle_process;
 }
 
@@ -62,8 +65,8 @@ void Scheduler::run() {
         parse_action(next_action);
 
         if(current_process->is_idle()) {
+            current_process->set_quantum(time_quantum);
             current_process = get_next_process();
-            current_process->set_quantum(TIME_QUANTUM);
         }
 
         print_state();
@@ -212,19 +215,6 @@ void Scheduler::attempt_halt() {
     }
 }
 
-
-//// ============================================================
-//// Function: update_current_process()
-////
-//// This changes the current process based on preemption
-//// conditions.
-//// ============================================================
-//void Scheduler::next_process_if_idle() {
-    //if(current_process->is_idle()) {
-        //current_process = get_next_process();
-        //current_process->set_quantum(TIME_QUANTUM);
-    //}
-//}
 
 // ============================================================
 // Function: get_next_process
