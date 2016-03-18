@@ -13,7 +13,8 @@ using namespace std;
 // Function: Scheduler(string, string)
 //
 // Constructs input files from passed strings and verifies that
-// they opened correctly.
+// they opened correctly. Incorrectly opened files are an
+// unrecoverable error and the scheduler will exit.
 // ============================================================
 Scheduler::Scheduler(int quantum,
                      string input_file_name,
@@ -248,12 +249,14 @@ shared_ptr<Process> Scheduler::get_next_process() {
 //
 // New processes are implicitly children of the running process.
 // Here a new process is initialized and added to the
-// ready_queue.
+// ready_queue. Processes are passed a closure which outputs
+// a terminate message for their on_delete parameter.
 // ============================================================
 void Scheduler::create_process(int PID, int burst) {
     //An exiting process's children will die when it terminates
     if(!current_process->burst_remaining())
         return;
+
     shared_ptr<Process> child(
             new Process(PID, burst, current_process,
                 [this](Process & p) {
@@ -354,7 +357,7 @@ void Scheduler::cascading_terminate(Process & process) {
     //If the current process is being deleted the shared_ptr
     //held by current_process must be deleted otherwise the
     //shared_ptr semantics of process destruction is ignored.
-    if(current_process->get_PID() == process.get_PID()) {
+    if(*current_process == process) {
         current_process = idle_process;
     }
 

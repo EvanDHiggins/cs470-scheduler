@@ -78,7 +78,7 @@ public:
     void add_child(std::shared_ptr<Process>);
     void remove_child(Process &);
 
-    bool owns(Process &) const;
+    bool owns(Process&) const;
     bool owns(int) const;
 
     void for_each_child(std::function<void(Process&)>) const;
@@ -122,5 +122,7 @@ public:
 private:
     void print(std::ostream &) const;
 };
+
+bool operator==(const Process&, const Process&);
 
 #endif //PROCESS_H

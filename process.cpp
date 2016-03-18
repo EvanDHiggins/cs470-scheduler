@@ -60,7 +60,7 @@ void Process::remove_child(Process & child) {
     children.erase(
             remove_if(children.begin(), children.end(),
                         [&](shared_ptr<Process> p) {
-                            return p->get_PID() == child.get_PID();
+                            return *p == child;
                         }),
             children.end());
 }
@@ -99,7 +99,7 @@ bool Process::receive_event(int event_id) {
 //  One of P's children 'owns' Q. 
 // ============================================================
 bool Process::owns(Process & p) const {
-    if(get_PID() == p.get_PID())
+    if(*this == p)
         return true;
 
     for(auto &child : children) {
@@ -142,6 +142,12 @@ void Process::for_each_child(function<void(Process&)> func) const {
     }
 }
 
+// ============================================================
+// Function: terminate();
+//
+// Deletes the shared_ptr to this held by parent. This results
+// in a cascading termination of all of this's child processes.
+// ============================================================
 void Process::terminate() {
     auto shared_parent = parent.lock();
     if(shared_parent) {
@@ -160,4 +166,14 @@ void Process::print(ostream & out) const {
 
 void IdleProcess::print(ostream & out) const {
     out << "PID " << IDLE_PID;
+}
+
+// ============================================================
+// Function: operator==(Process, Process)
+// Returns:  bool
+//
+// Returns true if both processes have the same PID.
+// ============================================================
+bool operator==(const Process & lhs, const Process & rhs) {
+    return lhs.get_PID() == rhs.get_PID();
 }
