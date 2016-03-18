@@ -133,12 +133,15 @@ bool Process::owns(int PID) const {
 // graph without the possibility of a memory leak.
 //
 // This applies func to each child of this and recursively calls
-// itself down the tree.
+// itself down the tree until it finds a node that matches the
+// predicate.
 // ============================================================
-void Process::for_each_child(function<void(Process&)> func) const {
+void Process::search_children_until(function<bool(Process&)> pred) const {
     for(auto &child : children) {
-        func(*child);
-        child->for_each_child(func);
+        //Stop recursing when the predicate is met
+        if(pred(*child))
+            return;
+        child->search_children_until(pred);
     }
 }
 

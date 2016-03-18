@@ -61,8 +61,6 @@ void Scheduler::run() {
 
         current_process->tick();
 
-        //attempt_halt();
-
         parse_action(next_action);
 
         if(current_process->is_idle()) {
@@ -77,11 +75,6 @@ void Scheduler::run() {
             current_process = get_next_process();
             current_process->set_quantum(time_quantum);
         }
-
-        //if(current_process->is_idle()) {
-            //current_process = get_next_process();
-            //current_process->set_quantum(time_quantum);
-        //}
 
         print_state();
     }
@@ -143,7 +136,6 @@ void Scheduler::parse_action(const string & action) {
         error_unrecognized_action(action);
         return;
     }
-
     if(tokens[0] == "C") {
         //Create action takes the form: "C # #"
         if(tokens.size() != 3) {
@@ -216,23 +208,6 @@ void Scheduler::parse_action(const string & action) {
 
     }
 }
-
-// ============================================================
-// Function: attempt_halt()
-//
-// Checks to see if the process should be halted. This occurs
-// when the process has no remaining burst or when its quantum
-// ============================================================
-void Scheduler::attempt_halt() {
-    if(current_process->is_exiting()) {
-        cascading_terminate(*current_process);
-        current_process = idle_process;
-    } else if(!current_process->quantum_remaining()) {
-        ready_enqueue(current_process);
-        current_process = idle_process;
-    }
-}
-
 
 // ============================================================
 // Function: get_next_process
@@ -328,6 +303,9 @@ void Scheduler::signal_event(int event_id) {
             if(shared_proc->receive_event(event_id)) {
                 wait_queue.erase(i);
                 ready_enqueue(weak_ptr<Process>(shared_proc));
+                return;
+            } else {
+                ++i;
             }
         } else {
             i = wait_queue.erase(i);
@@ -349,10 +327,12 @@ void Scheduler::destroy_by_pid(int pid) {
     if(!current_process->owns(pid))
         return;
 
-    idle_process->for_each_child([pid, this](Process & p) {
+    idle_process->search_children_until([pid, this](Process & p) {
                 if(p.get_PID() == pid) {
                     cascading_terminate(p);
+                    return true;
                 }
+                return false;
             });
 }
 

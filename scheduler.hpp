@@ -37,7 +37,6 @@ private:
 
     void print_state();
     void parse_action(const std::string&);
-    void attempt_halt();
     void update_current_process();
     std::shared_ptr<Process> get_next_process();
 

@@ -12,10 +12,6 @@
 #include <iostream>
 #include <vector>
 
-class Process;
-typedef std::shared_ptr<Process> SharedProcPtr;
-typedef std::weak_ptr<Process> WeakProcPtr;
-
 // ============================================================
 //
 // The model I settled on to represent parent/child relationships
@@ -77,12 +73,13 @@ public:
     bool receive_event(int);
 
     void add_child(std::shared_ptr<Process>);
-    void remove_child(Process &);
+    void remove_child(Process&);
 
     bool owns(Process&) const;
     bool owns(int) const;
 
-    void for_each_child(std::function<void(Process&)>) const;
+    //void for_each_child(std::function<void(Process&)>) const;
+    void search_children_until(std::function<bool(Process&)>) const;
 
     void terminate();
 
