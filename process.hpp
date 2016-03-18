@@ -69,6 +69,7 @@ public:
     virtual bool is_idle() const { return false; }
     virtual bool burst_remaining() const { return remaining_burst > 0; }
     virtual bool quantum_remaining() const { return remaining_quantum > 0; }
+    virtual bool is_exiting() const { return remaining_burst <= 0; }
 
     virtual void tick();
 
@@ -119,6 +120,7 @@ public:
     bool is_idle() const { return true; }
     bool burst_remaining() const { return true; }
     bool quantum_remaining() const { return true; }
+    bool is_exiting() const { return false; }
 private:
     void print(std::ostream &) const;
 };

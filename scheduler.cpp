@@ -61,14 +61,27 @@ void Scheduler::run() {
 
         current_process->tick();
 
-        attempt_halt();
+        //attempt_halt();
 
         parse_action(next_action);
 
         if(current_process->is_idle()) {
             current_process = get_next_process();
             current_process->set_quantum(time_quantum);
+        } else if(current_process->is_exiting()) {
+            cascading_terminate(*current_process);
+            current_process = get_next_process();
+            current_process->set_quantum(time_quantum);
+        } else if(!current_process->quantum_remaining()) {
+            ready_enqueue(current_process);
+            current_process = get_next_process();
+            current_process->set_quantum(time_quantum);
         }
+
+        //if(current_process->is_idle()) {
+            //current_process = get_next_process();
+            //current_process->set_quantum(time_quantum);
+        //}
 
         print_state();
     }
@@ -211,7 +224,7 @@ void Scheduler::parse_action(const string & action) {
 // when the process has no remaining burst or when its quantum
 // ============================================================
 void Scheduler::attempt_halt() {
-    if(!current_process->burst_remaining()) {
+    if(current_process->is_exiting()) {
         cascading_terminate(*current_process);
         current_process = idle_process;
     } else if(!current_process->quantum_remaining()) {
@@ -253,8 +266,9 @@ shared_ptr<Process> Scheduler::get_next_process() {
 // a terminate message for their on_delete parameter.
 // ============================================================
 void Scheduler::create_process(int PID, int burst) {
-    //An exiting process's children will die when it terminates
-    if(!current_process->burst_remaining())
+    //An exiting process's children will die when it terminates so
+    //there is no point in creating a new child.
+    if(current_process->is_exiting())
         return;
 
     shared_ptr<Process> child(
@@ -264,6 +278,10 @@ void Scheduler::create_process(int PID, int burst) {
                         output_file << p << " terminated" << endl;
                 }));
     current_process->add_child(child);
+    if(!current_process->quantum_remaining()) {
+        ready_enqueue(current_process);
+        current_process = idle_process;
+    }
     ready_enqueue(weak_ptr<Process>(child));
 }
 
@@ -278,7 +296,7 @@ void Scheduler::wait_for_event(int event_id) {
         return;
 
     //An exiting process should not be placed on the wait queue.
-    if(!current_process->burst_remaining())
+    if(current_process->is_exiting())
         return;
 
     current_process->wait_on(event_id);
@@ -300,6 +318,10 @@ void Scheduler::wait_for_event(int event_id) {
 // the wait_queue.
 // ============================================================
 void Scheduler::signal_event(int event_id) {
+    if(!current_process->quantum_remaining()) {
+        ready_enqueue(current_process);
+        current_process = idle_process;
+    }
     for(auto i = wait_queue.begin(); i != wait_queue.end();) {
         auto shared_proc = i->lock();
         if(shared_proc) {
@@ -321,7 +343,7 @@ void Scheduler::signal_event(int event_id) {
 // by the currently running process.
 // ============================================================
 void Scheduler::destroy_by_pid(int pid) {
-    if(!current_process->burst_remaining())
+    if(current_process->is_exiting())
         return;
 
     if(!current_process->owns(pid))
